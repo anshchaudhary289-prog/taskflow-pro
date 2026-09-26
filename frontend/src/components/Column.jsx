@@ -1,0 +1,2 @@
+import{useDroppable}from"@dnd-kit/core";import TaskCard from"./TaskCard.jsx";
+export default function Column({column,tasks,allTasks,onRequestSuggestions,onAcceptSuggestion}){const{setNodeRef,isOver}=useDroppable({id:column});return <section ref={setNodeRef} className={"column "+(isOver?"over":"")}><h3>{column}<span>{tasks.length}</span></h3>{tasks.map(t=><TaskCard key={t.id} task={t} allTasks={allTasks} onRequestSuggestions={onRequestSuggestions} onAcceptSuggestion={onAcceptSuggestion}/>)}</section>}
