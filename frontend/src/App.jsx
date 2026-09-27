@@ -1,22 +1,265 @@
-import{useEffect,useState}from"react";import{DndContext}from"@dnd-kit/core";import Column from"./components/Column.jsx";import DependencyGraph from"./components/DependencyGraph.jsx";import"./styles.css";
-const COLUMNS=["Backlog","In Progress","Review","Done"];const API=import.meta.env.VITE_API_URL||"http://localhost:8000";
-async function api(path,opt={}){const res=await fetch(API+path,{headers:{"Content-Type":"application/json"},...opt});if(!res.ok){const b=await res.json().catch(()=>({}));throw Error(b.detail||"Request failed");}return res.json()}
-export default function App(){const[tasks,setTasks]=useState([]),[cp,setCp]=useState({path:[],total_duration:0}),[title,setTitle]=useState(""),[from,setFrom]=useState(""),[to,setTo]=useState(""),[error,setError]=useState(""),[simTask,setSimTask]=useState(""),[days,setDays]=useState(3),[impact,setImpact]=useState(null),[whatIf,setWhatIf]=useState(null),[riskState,setRiskState]=useState(null),[breakTask,setBreakTask]=useState(""),[breakdown,setBreakdown]=useState(null);
-async function refresh(){try{const[a,b]=await Promise.all([api("/board-state"),api("/critical-path")]);setTasks(a);setCp(b);setSimTask(x=>x||a[0]?.id||"");setBreakTask(x=>x||a[0]?.id||"")}catch(e){setError(e.message)}}
-useEffect(()=>{refresh()},[]);
-async function drag(e){if(!e.over)return;const t=tasks.find(x=>x.id===e.active.id);if(!t||t.column===e.over.id)return;try{await api("/tasks/"+t.id,{method:"PUT",body:JSON.stringify({column:e.over.id})});refresh()}catch(e){setError(e.message)}}
-async function addTask(e){e.preventDefault();if(!title.trim())return;const id=title.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-")+"-"+Date.now().toString(36);try{await api("/tasks",{method:"POST",body:JSON.stringify({id,title:title.trim(),duration_days:1})});setTitle("");refresh()}catch(e){setError(e.message)}}
-async function addDep(e){e.preventDefault();setError("");if(!from||!to||from===to)return;try{await api("/dependencies",{method:"POST",body:JSON.stringify({from_task_id:from,to_task_id:to})});setFrom("");setTo("");refresh()}catch(e){setError(e.message)}}
-async function simulate(e){e.preventDefault();try{const body={method:"POST",body:JSON.stringify({delta_days:Number(days)})};const[a,b]=await Promise.all([api("/tasks/"+simTask+"/shift",body),api("/tasks/"+simTask+"/what-if",body)]);setImpact(a.affected_tasks);setWhatIf(b.explanation)}catch(e){setError(e.message)}}
-async function analyzeRisks(){try{setRiskState(await api("/risk-analysis"))}catch(e){setError(e.message)}}
-async function breakdownTask(){try{setBreakdown(await api("/tasks/"+breakTask+"/breakdown"))}catch(e){setError(e.message)}}
-async function accept(a,b){try{await api("/dependencies",{method:"POST",body:JSON.stringify({from_task_id:a,to_task_id:b})});refresh()}catch(e){setError(e.message)}}
-const blocked=tasks.filter(t=>t.status==="Blocked").length;const done=tasks.filter(t=>t.column==="Done").length;const critical=new Set(cp.path);
-return <div className="app"><header><div className="eyebrow">DAG-BASED PROJECT SCHEDULING</div><h1>TaskFlow <em>Pro</em></h1><p>Plan dependencies, understand schedule impact, and surface project risk before delays compound.</p></header>{error&&<div className="error">{error}</div>}<div className="metrics"><div><b>{tasks.length}</b><span>Tasks</span></div><div><b>{done}</b><span>Completed</span></div><div><b>{blocked}</b><span>Blocked</span></div><div><b>{cp.total_duration}d</b><span>Critical Path</span></div></div>
-<section className="panel"><h2>Critical Path</h2><p>{cp.path.map((id,i)=><span key={id}>{tasks.find(t=>t.id===id)?.title||id}{i<cp.path.length-1?" → ":""}</span>)}</p></section>
-<section className="panel"><div className="panel-head"><div><h2>Dependency Map</h2><small>Critical-path nodes are highlighted.</small></div></div>{tasks.length?<DependencyGraph tasks={tasks} criticalPath={cp}/>:<p>No tasks yet.</p>}</section>
-<section className="tools"><div className="panel"><h2>Delay Simulation</h2><div className="row"><select value={simTask} onChange={e=>setSimTask(e.target.value)}>{tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select><input type="number" value={days} onChange={e=>setDays(e.target.value)}/><button onClick={simulate}>Simulate</button></div>{impact&&<div className="result">{Object.entries(impact).map(([id,s])=><div key={id}>{tasks.find(t=>t.id===id)?.title}: <b>{s>0?"+":""}{s}d</b></div>)}</div>}{whatIf&&<p className="callout">{whatIf.headline}<br/>{whatIf.recommendation}</p>}</div>
-<div className="panel"><h2>AI Risk Analysis</h2><button onClick={analyzeRisks}>Analyze Risks</button>{riskState?.risks?.map(r=><div className="risk" key={r.task_id}><b>{r.task_title}</b> · {r.risk_level} {r.score}/100<ul>{r.reasons.map(x=><li key={x}>{x}</li>)}</ul></div>)}</div></section>
-<section className="tools"><div className="panel"><h2>AI Task Breakdown</h2><div className="row"><select value={breakTask} onChange={e=>setBreakTask(e.target.value)}>{tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select><button onClick={breakdownTask}>Generate</button></div>{breakdown?.subtasks?.map((s,i)=><div className="step" key={i}><b>{i+1}. {s.title}</b><small>{s.reason}</small></div>)}</div><div className="panel"><h2>What-if insight</h2><p className="muted">{whatIf?.headline||"Run a delay simulation to see downstream impact."}</p></div></section>
-<div className="panel forms"><form onSubmit={addTask}><input placeholder="New task title" value={title} onChange={e=>setTitle(e.target.value)}/><button>Add Task</button></form><form onSubmit={addDep}><select value={from} onChange={e=>setFrom(e.target.value)}><option value="">Prerequisite</option>{tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select><span>→</span><select value={to} onChange={e=>setTo(e.target.value)}><option value="">Dependent</option>{tasks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select><button>Add Dependency</button></form></div>
-<DndContext onDragEnd={drag}><div className="board">{COLUMNS.map(c=><Column key={c} column={c} tasks={tasks.filter(t=>t.column===c)} allTasks={tasks} onRequestSuggestions={id=>api("/tasks/"+id+"/suggest-dependencies")} onAcceptSuggestion={accept}/>)}</div></DndContext></div>}
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { DndContext } from "@dnd-kit/core";
+import Column from "./components/Column.jsx";
+import DependencyGraph from "./components/DependencyGraph.jsx";
+import "./styles.css";
+
+const COLUMNS = ["Backlog", "In Progress", "Review", "Done"];
+const API_BASE = "http://localhost:8000";
+
+async function api(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export default function App() {
+  const [tasks, setTasks] = useState([]);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [depFrom, setDepFrom] = useState("");
+  const [depTo, setDepTo] = useState("");
+  const [depError, setDepError] = useState(null);
+  const [globalError, setGlobalError] = useState(null);
+  const [criticalPathData, setCriticalPathData] = useState(null);
+  const [showCriticalPath, setShowCriticalPath] = useState(false);
+  const [cpLoading, setCpLoading] = useState(false);
+  const [cpError, setCpError] = useState(null);
+  const [showGraph, setShowGraph] = useState(false);
+  const [riskData, setRiskData] = useState(null);
+  const [showRisk, setShowRisk] = useState(false);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskError, setRiskError] = useState(null);
+
+  const refreshBoard = useCallback(() => {
+    api("/board-state").then(setTasks).catch((err) => setGlobalError(err.message));
+  }, []);
+
+  useEffect(() => {
+    refreshBoard();
+  }, [refreshBoard]);
+
+  async function handleDragEnd(event) {
+    const { active, over } = event;
+    if (!over) return;
+    const taskId = active.id;
+    const newColumn = over.id;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.column === newColumn) return;
+    try {
+      await api(`/tasks/${taskId}`, {
+        method: "PUT",
+        body: JSON.stringify({ column: newColumn }),
+      });
+      refreshBoard();
+    } catch (err) {
+      setGlobalError(err.message);
+    }
+  }
+
+  async function handleAddTask(e) {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    const id = newTaskTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40) + "-" + Date.now().toString(36);
+    try {
+      await api("/tasks", {
+        method: "POST",
+        body: JSON.stringify({ id, title: newTaskTitle.trim(), duration_days: 1 }),
+      });
+      setNewTaskTitle("");
+      refreshBoard();
+    } catch (err) {
+      setGlobalError(err.message);
+    }
+  }
+
+  async function handleAddDependency(e) {
+    e.preventDefault();
+    setDepError(null);
+    if (!depFrom || !depTo || depFrom === depTo) return;
+    try {
+      await api("/dependencies", {
+        method: "POST",
+        body: JSON.stringify({ from_task_id: depFrom, to_task_id: depTo }),
+      });
+      setDepFrom("");
+      setDepTo("");
+      refreshBoard();
+    } catch (err) {
+      setDepError(err.message);
+    }
+  }
+
+  const criticalPathIds = useMemo(() => {
+    if (!showCriticalPath || !criticalPathData?.path) return new Set();
+    return new Set(criticalPathData.path);
+  }, [showCriticalPath, criticalPathData]);
+
+  async function handleToggleCriticalPath() {
+    if (showCriticalPath) {
+      setShowCriticalPath(false);
+      return;
+    }
+    setCpLoading(true);
+    setCpError(null);
+    try {
+      const data = await api("/critical-path");
+      setCriticalPathData(data);
+      setShowCriticalPath(true);
+    } catch (err) {
+      setCpError(err.message || "Could not load critical path");
+    } finally {
+      setCpLoading(false);
+    }
+  }
+
+  function criticalPathTitle(taskId) {
+    return tasks.find((t) => t.id === taskId)?.title || taskId;
+  }
+
+  async function requestSuggestions(taskId) {
+    return api(`/tasks/${taskId}/suggest-dependencies`);
+  }
+
+  async function acceptSuggestion(fromTaskId, toTaskId) {
+    await api("/dependencies", {
+      method: "POST",
+      body: JSON.stringify({ from_task_id: fromTaskId, to_task_id: toTaskId }),
+    });
+    refreshBoard();
+  }
+
+  async function requestBreakdown(taskId) {
+    return api(`/tasks/${taskId}/breakdown`);
+  }
+
+  async function simulateDelay(taskId, deltaDays) {
+    return api(`/tasks/${taskId}/shift`, {
+      method: "POST",
+      body: JSON.stringify({ delta_days: deltaDays }),
+    });
+  }
+
+  async function handleToggleRisk() {
+    if (showRisk) {
+      setShowRisk(false);
+      return;
+    }
+    setRiskLoading(true);
+    setRiskError(null);
+    try {
+      const data = await api("/risk-analysis");
+      setRiskData(data);
+      setShowRisk(true);
+    } catch (err) {
+      setRiskError(err.message || "Could not load risk analysis");
+    } finally {
+      setRiskLoading(false);
+    }
+  }
+
+  return (
+    <div className="app">
+      <h1>TaskFlow Pro</h1>
+      {globalError && <div className="error-msg global">{globalError}</div>}
+
+      <div className="toolbar">
+        <form onSubmit={handleAddTask} className="add-task-form">
+          <input placeholder="New task title..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
+          <button type="submit">Add Task</button>
+        </form>
+
+        <form onSubmit={handleAddDependency} className="add-dep-form">
+          <select value={depFrom} onChange={(e) => setDepFrom(e.target.value)}>
+            <option value="">Prerequisite...</option>
+            {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+          <span>must finish before</span>
+          <select value={depTo} onChange={(e) => setDepTo(e.target.value)}>
+            <option value="">Dependent task...</option>
+            {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+          <button type="submit">Add Dependency</button>
+        </form>
+        {depError && <div className="error-msg">{depError}</div>}
+
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button type="button" className={`critical-path-btn ${showCriticalPath ? "active" : ""}`} onClick={handleToggleCriticalPath} disabled={cpLoading}>
+            {cpLoading ? "Loading..." : showCriticalPath ? "Hide Critical Path" : "Highlight Critical Path"}
+          </button>
+          <button type="button" onClick={() => setShowGraph((v) => !v)} style={{ padding: "0.4rem 0.8rem", border: "none", borderRadius: "6px", background: showGraph ? "#1d4ed8" : "#2563eb", color: "white", cursor: "pointer" }}>
+            {showGraph ? "Hide Dependency Graph" : "Dependency Graph"}
+          </button>
+          <button type="button" onClick={handleToggleRisk} disabled={riskLoading} style={{ padding: "0.4rem 0.8rem", border: "none", borderRadius: "6px", background: showRisk ? "#6d28d9" : "#7c3aed", color: "white", cursor: riskLoading ? "not-allowed" : "pointer", opacity: riskLoading ? 0.6 : 1 }}>
+            {riskLoading ? "Analyzing..." : showRisk ? "Hide AI Risk Analysis" : "AI Risk Analysis"}
+          </button>
+        </div>
+        {cpError && <div className="error-msg">{cpError}</div>}
+        {riskError && <div className="error-msg">{riskError}</div>}
+      </div>
+
+      {showCriticalPath && criticalPathData && (
+        <div className="critical-path-banner">
+          {criticalPathData.path?.length ? (
+            <>
+              <span>Critical Path: {criticalPathData.path.map(criticalPathTitle).join(" → ")}</span>
+              <span className="duration-pill">Total: {criticalPathData.total_duration} days</span>
+            </>
+          ) : <span>No critical path found — no tasks yet.</span>}
+        </div>
+      )}
+
+      {showRisk && riskData && (
+        <div className="critical-path-banner" style={{ display: "block" }}>
+          <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>
+            AI Risk Analysis — advisory only, no schedule changes made
+            {riskData.llm_used ? " (AI explanation)" : " (deterministic analysis)"}
+          </div>
+          <div style={{ marginBottom: "0.4rem" }}>
+            <strong>{riskData.risk_level ? riskData.risk_level.toUpperCase() : ""}:</strong> {riskData.summary}
+          </div>
+          {riskData.explanation && riskData.explanation !== riskData.summary && (
+            <div style={{ marginBottom: "0.4rem", fontStyle: "italic" }}>{riskData.explanation}</div>
+          )}
+          {riskData.risks?.length === 0 ? (
+            <div className="no-suggestions">No significant risks detected.</div>
+          ) : (
+            <div className="dep-chips" style={{ flexDirection: "column", alignItems: "stretch" }}>
+              {(riskData.risks || []).map((r, i) => (
+                <div key={i} className="chip chip-suggested" style={{ alignItems: "flex-start", flexDirection: "column" }}>
+                  <span><strong>[{r.severity} / {r.category}]</strong> {(r.task_titles || []).join(", ") || "Project"}</span>
+                  <span>{r.reason}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showGraph && <div style={{ marginBottom: "1rem" }}><DependencyGraph tasks={tasks} criticalPathIds={criticalPathIds} /></div>}
+
+      <DndContext onDragEnd={handleDragEnd}>
+        <div className="board">
+          {COLUMNS.map((column) => (
+            <Column
+              key={column}
+              column={column}
+              tasks={tasks.filter((t) => t.column === column)}
+              allTasks={tasks}
+              onRequestSuggestions={requestSuggestions}
+              onAcceptSuggestion={acceptSuggestion}
+              onSimulateDelay={simulateDelay}
+              onRequestBreakdown={requestBreakdown}
+              criticalPathIds={criticalPathIds}
+            />
+          ))}
+        </div>
+      </DndContext>
+    </div>
+  );
+}
