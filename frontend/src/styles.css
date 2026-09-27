@@ -751,3 +751,127 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .board-scroll { scroll-snap-type: x mandatory; }
   .column { scroll-snap-align: start; }
 }
+
+
+/* ---------- Project command center ---------- */
+
+.command-center {
+  background: var(--navy-900);
+  color: #eef2fb;
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.2rem;
+  box-shadow: var(--shadow-md);
+}
+
+.command-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.command-head h2 {
+  margin: 0.18rem 0 0.25rem;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+
+.command-head p {
+  margin: 0;
+  color: #aebbd4;
+  font-size: 0.8rem;
+}
+
+.eyebrow {
+  color: #7fb0ff;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 999px;
+  padding: 0.42rem 0.72rem;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+  background: rgba(255,255,255,0.06);
+}
+
+.health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+}
+
+.health-badge.risk .health-dot { background: #fbbf24; }
+.health-badge.watch .health-dot { background: #60a5fa; }
+.health-badge.neutral .health-dot { background: #94a3b8; }
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.command-card {
+  min-width: 0;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 11px;
+  padding: 0.85rem;
+}
+
+.command-card.attention {
+  border-color: rgba(251,191,36,0.42);
+  background: rgba(251,191,36,0.08);
+}
+
+.command-label {
+  display: block;
+  color: #9eacc8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.38rem;
+}
+
+.command-card strong {
+  display: block;
+  color: #fff;
+  font-size: 1.15rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.command-card strong small {
+  color: #aebbd4;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.command-card p {
+  color: #aebbd4;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin: 0.35rem 0 0;
+}
+
+.action-card strong { color: #dbeafe; }
+
+@media (max-width: 900px) {
+  .command-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .command-head { flex-direction: column; }
+  .command-grid { grid-template-columns: 1fr; }
+}
