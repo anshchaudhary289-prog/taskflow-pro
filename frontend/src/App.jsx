@@ -36,14 +36,6 @@ export default function App() {
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskError, setRiskError] = useState(null);
 
-  const projectHealth = useMemo(() => {
-    if (tasks.length === 0) return { label: "No Data", tone: "neutral" };
-    if (tasks.every((t) => t.column === "Done")) return { label: "Complete", tone: "good" };
-    if (blockedCount > 0) return { label: "At Risk", tone: "risk" };
-    if (inProgressCount === 0) return { label: "Ready", tone: "watch" };
-    return { label: "On Track", tone: "good" };
-  }, [tasks, blockedCount, inProgressCount]);
-
   const refreshBoard = useCallback(() => {
     Promise.all([api("/board-state"), api("/critical-path")])
       .then(([board, criticalPath]) => {
@@ -184,6 +176,14 @@ export default function App() {
   const criticalCount = showCriticalPath && criticalPathData && criticalPathData.path
     ? criticalPathData.path.length
     : null;
+
+  const projectHealth = useMemo(() => {
+    if (tasks.length === 0) return { label: "No Data", tone: "neutral" };
+    if (tasks.every((t) => t.column === "Done")) return { label: "Complete", tone: "good" };
+    if (blockedCount > 0) return { label: "At Risk", tone: "risk" };
+    if (inProgressCount === 0) return { label: "Ready", tone: "watch" };
+    return { label: "On Track", tone: "good" };
+  }, [tasks, blockedCount, inProgressCount]);
 
   function scrollTo(id) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
