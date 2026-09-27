@@ -131,3 +131,13 @@ CI runs backend tests and the frontend production build.
 - Real `.env` files are excluded from version control.
 - Build artifacts, virtual environments, caches, databases, and dependency directories are excluded through `.gitignore`.
 - AI-generated dependency suggestions cannot directly modify the graph without human acceptance and backend validation.
+
+
+## 10. Known Failure Cases and Expected Handling
+
+- A dependency that would create a direct or transitive cycle is rejected rather than persisted.
+- A self-dependency or duplicate dependency is rejected by backend validation.
+- An AI dependency suggestion is not applied unless the user explicitly accepts it.
+- If Gemini is unavailable or no API key is configured, deterministic fallback logic is used for the supported AI-assisted features.
+- A what-if delay simulation is calculated as a simulation and does not permanently modify the stored schedule.
+- Invalid task/dependency request data is rejected by the API validation layer.
