@@ -36,8 +36,21 @@ export default function App() {
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskError, setRiskError] = useState(null);
 
+  const projectHealth = useMemo(() => {
+    if (tasks.length === 0) return { label: "No Data", tone: "neutral" };
+    if (tasks.every((t) => t.column === "Done")) return { label: "Complete", tone: "good" };
+    if (blockedCount > 0) return { label: "At Risk", tone: "risk" };
+    if (inProgressCount === 0) return { label: "Ready", tone: "watch" };
+    return { label: "On Track", tone: "good" };
+  }, [tasks, blockedCount, inProgressCount]);
+
   const refreshBoard = useCallback(() => {
-    api("/board-state").then(setTasks).catch((err) => setGlobalError(err.message));
+    Promise.all([api("/board-state"), api("/critical-path")])
+      .then(([board, criticalPath]) => {
+        setTasks(board);
+        setCriticalPathData(criticalPath);
+      })
+      .catch((err) => setGlobalError(err.message));
   }, []);
 
   useEffect(() => {
@@ -220,6 +233,45 @@ export default function App() {
         <div className="stat-card">
           <span className="stat-icon critical">⏳</span>
           <div><div className="stat-value">{criticalCount === null ? "–" : criticalCount}</div><div className="stat-label">Critical Path</div></div>
+        </div>
+      </section>
+
+      <section className="command-center" aria-label="Project command center">
+        <div className="command-head">
+          <div>
+            <span className="eyebrow">COMMAND CENTER</span>
+            <h2>Project Health</h2>
+            <p>One-screen view of delivery pressure, dependency flow and the next action.</p>
+          </div>
+          <span className={`health-badge ${projectHealth.tone}`}>
+            <span className="health-dot" />{projectHealth.label}
+          </span>
+        </div>
+        <div className="command-grid">
+          <article className="command-card">
+            <span className="command-label">Delivery chain</span>
+            <strong>{criticalPathData?.total_duration ?? "–"} <small>days</small></strong>
+            <p>{criticalPathData?.path?.length ?? 0} tasks on the critical path</p>
+          </article>
+          <article className={`command-card ${blockedCount ? "attention" : ""}`}>
+            <span className="command-label">Needs attention</span>
+            <strong>{blockedCount}</strong>
+            <p>{blockedCount ? (tasks.find((t) => t.status === "Blocked")?.title || "Blocked prerequisites") : "No blocked tasks"}</p>
+          </article>
+          <article className="command-card">
+            <span className="command-label">Work in motion</span>
+            <strong>{inProgressCount}</strong>
+            <p>{readyCount} tasks are ready to start</p>
+          </article>
+          <article className="command-card action-card">
+            <span className="command-label">Recommended action</span>
+            <strong>{blockedCount ? "Unblock the next task" : "Protect the critical chain"}</strong>
+            <p>{blockedCount
+              ? "Finish the prerequisite blocking the first waiting task."
+              : criticalPathData?.path?.length
+                ? `Monitor: ${criticalPathTitle(criticalPathData.path[criticalPathData.path.length - 1])}`
+                : "Reveal project dependencies to guide execution."}</p>
+          </article>
         </div>
       </section>
 
