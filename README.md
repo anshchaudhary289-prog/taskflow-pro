@@ -12,6 +12,7 @@ TaskFlow Pro is a dependency-aware project scheduling application built around a
 - AI dependency suggestions with explicit human acceptance
 - AI task breakdown and graph-aware risk analysis
 - Deterministic fallbacks when Gemini is unavailable
+- Project Health Command Center with delivery-chain, blockers, workload, and action signals
 - Unit tests for the graph engine
 
 ## Setup
