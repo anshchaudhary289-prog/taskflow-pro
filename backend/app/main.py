@@ -76,6 +76,12 @@ def create_dependency(payload: schemas.DependencyCreate, db: Session = Depends(g
         if not db.query(models.Task).filter_by(id=tid).first():
             raise HTTPException(status_code=404, detail=f"Task {tid} not found")
     _, _, _, _, forward, _ = _load_graph(db)
+    if payload.from_task_id == payload.to_task_id:
+        raise HTTPException(status_code=409, detail="A task cannot depend on itself")
+    if db.query(models.TaskDependency).filter_by(
+        from_task_id=payload.from_task_id, to_task_id=payload.to_task_id
+    ).first():
+        raise HTTPException(status_code=409, detail="This dependency already exists")
     if graph_engine.creates_cycle(forward, payload.from_task_id, payload.to_task_id):
         raise HTTPException(
             status_code=409,
