@@ -51,12 +51,13 @@ export default function App() {
     const newColumn = over.id;
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.column === newColumn) return;
+
     try {
       await api(`/tasks/${taskId}`, {
         method: "PUT",
         body: JSON.stringify({ column: newColumn }),
       });
-      refreshBoard();
+      refreshBoard(); // re-fetch from backend (source of truth) rather than trust optimistic local state
     } catch (err) {
       setGlobalError(err.message);
     }
@@ -91,12 +92,13 @@ export default function App() {
       setDepTo("");
       refreshBoard();
     } catch (err) {
+      // The engine's own cycle-rejection message surfaces directly here
       setDepError(err.message);
     }
   }
 
   const criticalPathIds = useMemo(() => {
-    if (!showCriticalPath || !criticalPathData?.path) return new Set();
+    if (!showCriticalPath || !criticalPathData || !criticalPathData.path) return new Set();
     return new Set(criticalPathData.path);
   }, [showCriticalPath, criticalPathData]);
 
@@ -163,103 +165,258 @@ export default function App() {
     }
   }
 
+  const readyCount = tasks.filter((t) => t.status === "Ready").length;
+  const blockedCount = tasks.filter((t) => t.status === "Blocked").length;
+  const inProgressCount = tasks.filter((t) => t.column === "In Progress").length;
+  const criticalCount = showCriticalPath && criticalPathData && criticalPathData.path
+    ? criticalPathData.path.length
+    : null;
+
+  function scrollTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="app">
-      <h1>TaskFlow Pro</h1>
+      <header className="topbar">
+        <div className="brand">
+          <span className="logo-mark">TF</span>
+          <div>
+            <span className="brand-name">TaskFlow Pro</span>
+            <span className="brand-sub">Project Dashboard</span>
+          </div>
+        </div>
+        <div className="topbar-status" title="Live project health">
+          <span className={`status-dot ${blockedCount > 0 ? "warn" : ""}`} />
+          {tasks.length === 0
+            ? "No tasks yet"
+            : `${blockedCount} blocked · ${readyCount} ready`}
+        </div>
+        <nav className="topbar-nav" aria-label="Dashboard sections">
+          <button type="button" className="topbar-link" onClick={() => scrollTo("board-section")}>Board</button>
+          <button type="button" className="topbar-link" onClick={() => scrollTo("intel-section")}>Project Intelligence</button>
+        </nav>
+      </header>
+
       {globalError && <div className="error-msg global">{globalError}</div>}
 
-      <div className="toolbar">
-        <form onSubmit={handleAddTask} className="add-task-form">
-          <input placeholder="New task title..." value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
-          <button type="submit">Add Task</button>
-        </form>
-
-        <form onSubmit={handleAddDependency} className="add-dep-form">
-          <select value={depFrom} onChange={(e) => setDepFrom(e.target.value)}>
-            <option value="">Prerequisite...</option>
-            {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-          </select>
-          <span>must finish before</span>
-          <select value={depTo} onChange={(e) => setDepTo(e.target.value)}>
-            <option value="">Dependent task...</option>
-            {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
-          </select>
-          <button type="submit">Add Dependency</button>
-        </form>
-        {depError && <div className="error-msg">{depError}</div>}
-
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button type="button" className={`critical-path-btn ${showCriticalPath ? "active" : ""}`} onClick={handleToggleCriticalPath} disabled={cpLoading}>
-            {cpLoading ? "Loading..." : showCriticalPath ? "Hide Critical Path" : "Highlight Critical Path"}
-          </button>
-          <button type="button" onClick={() => setShowGraph((v) => !v)} style={{ padding: "0.4rem 0.8rem", border: "none", borderRadius: "6px", background: showGraph ? "#1d4ed8" : "#2563eb", color: "white", cursor: "pointer" }}>
-            {showGraph ? "Hide Dependency Graph" : "Dependency Graph"}
-          </button>
-          <button type="button" onClick={handleToggleRisk} disabled={riskLoading} style={{ padding: "0.4rem 0.8rem", border: "none", borderRadius: "6px", background: showRisk ? "#6d28d9" : "#7c3aed", color: "white", cursor: riskLoading ? "not-allowed" : "pointer", opacity: riskLoading ? 0.6 : 1 }}>
-            {riskLoading ? "Analyzing..." : showRisk ? "Hide AI Risk Analysis" : "AI Risk Analysis"}
-          </button>
+      <section className="stats-row" aria-label="Project summary">
+        <div className="stat-card">
+          <span className="stat-icon total">📋</span>
+          <div><div className="stat-value">{tasks.length}</div><div className="stat-label">Total Tasks</div></div>
         </div>
-        {cpError && <div className="error-msg">{cpError}</div>}
-        {riskError && <div className="error-msg">{riskError}</div>}
+        <div className="stat-card">
+          <span className="stat-icon ready">✓</span>
+          <div><div className="stat-value">{readyCount}</div><div className="stat-label">Ready</div></div>
+        </div>
+        <div className="stat-card">
+          <span className="stat-icon blocked">⛔</span>
+          <div><div className="stat-value">{blockedCount}</div><div className="stat-label">Blocked</div></div>
+        </div>
+        <div className="stat-card">
+          <span className="stat-icon progress">🔄</span>
+          <div><div className="stat-value">{inProgressCount}</div><div className="stat-label">In Progress</div></div>
+        </div>
+        <div className="stat-card">
+          <span className="stat-icon critical">⏳</span>
+          <div><div className="stat-value">{criticalCount === null ? "–" : criticalCount}</div><div className="stat-label">Critical Path</div></div>
+        </div>
+      </section>
+
+      <div className="toolbar">
+        <div>
+          <div className="toolbar-title">＋ New task</div>
+          <form onSubmit={handleAddTask} className="add-task-form">
+            <input
+              placeholder="New task title..."
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              aria-label="New task title"
+            />
+            <button type="submit">Add Task</button>
+          </form>
+        </div>
+
+        <div>
+          <div className="toolbar-title">⛓ Link dependencies</div>
+          <form onSubmit={handleAddDependency} className="add-dep-form">
+            <select value={depFrom} onChange={(e) => setDepFrom(e.target.value)} aria-label="Prerequisite task">
+              <option value="">Prerequisite...</option>
+              {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+            </select>
+            <span className="dep-arrow">must finish before</span>
+            <select value={depTo} onChange={(e) => setDepTo(e.target.value)} aria-label="Dependent task">
+              <option value="">Dependent task...</option>
+              {tasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+            </select>
+            <button type="submit">Add Dependency</button>
+          </form>
+          {depError && <div className="error-msg">{depError}</div>}
+        </div>
       </div>
 
-      {showCriticalPath && criticalPathData && (
-        <div className="critical-path-banner">
-          {criticalPathData.path?.length ? (
-            <>
-              <span>Critical Path: {criticalPathData.path.map(criticalPathTitle).join(" → ")}</span>
-              <span className="duration-pill">Total: {criticalPathData.total_duration} days</span>
-            </>
-          ) : <span>No critical path found — no tasks yet.</span>}
-        </div>
-      )}
-
-      {showRisk && riskData && (
-        <div className="critical-path-banner" style={{ display: "block" }}>
-          <div style={{ fontWeight: 700, marginBottom: "0.25rem" }}>
-            AI Risk Analysis — advisory only, no schedule changes made
-            {riskData.llm_used ? " (AI explanation)" : " (deterministic analysis)"}
-          </div>
-          <div style={{ marginBottom: "0.4rem" }}>
-            <strong>{riskData.risk_level ? riskData.risk_level.toUpperCase() : ""}:</strong> {riskData.summary}
-          </div>
-          {riskData.explanation && riskData.explanation !== riskData.summary && (
-            <div style={{ marginBottom: "0.4rem", fontStyle: "italic" }}>{riskData.explanation}</div>
-          )}
-          {riskData.risks?.length === 0 ? (
-            <div className="no-suggestions">No significant risks detected.</div>
-          ) : (
-            <div className="dep-chips" style={{ flexDirection: "column", alignItems: "stretch" }}>
-              {(riskData.risks || []).map((r, i) => (
-                <div key={i} className="chip chip-suggested" style={{ alignItems: "flex-start", flexDirection: "column" }}>
-                  <span><strong>[{r.severity} / {r.category}]</strong> {(r.task_titles || []).join(", ") || "Project"}</span>
-                  <span>{r.reason}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {showGraph && <div style={{ marginBottom: "1rem" }}><DependencyGraph tasks={tasks} criticalPathIds={criticalPathIds} /></div>}
+      <div className="section-head" id="board-section">
+        <h2>Kanban Board</h2>
+        <p>Drag cards between columns — blocked state updates automatically.</p>
+      </div>
 
       <DndContext onDragEnd={handleDragEnd}>
-        <div className="board">
-          {COLUMNS.map((column) => (
-            <Column
-              key={column}
-              column={column}
-              tasks={tasks.filter((t) => t.column === column)}
-              allTasks={tasks}
-              onRequestSuggestions={requestSuggestions}
-              onAcceptSuggestion={acceptSuggestion}
-              onSimulateDelay={simulateDelay}
-              onRequestBreakdown={requestBreakdown}
-              criticalPathIds={criticalPathIds}
-            />
-          ))}
+        <div className="board-scroll">
+          <div className="board">
+            {COLUMNS.map((column) => (
+              <Column
+                key={column}
+                column={column}
+                tasks={tasks.filter((t) => t.column === column)}
+                allTasks={tasks}
+                onRequestSuggestions={requestSuggestions}
+                onAcceptSuggestion={acceptSuggestion}
+                onSimulateDelay={simulateDelay}
+                onRequestBreakdown={requestBreakdown}
+                criticalPathIds={criticalPathIds}
+              />
+            ))}
+          </div>
         </div>
       </DndContext>
+
+      <div className="section-head" id="intel-section">
+        <h2>Project Intelligence</h2>
+        <p>Schedule insight powered by the dependency graph — advisory only.</p>
+      </div>
+
+      <section className="intel-grid">
+        <article className="intel-card">
+          <div className="intel-card-head">
+            <span className="intel-icon amber">⏳</span>
+            <div>
+              <div className="intel-title">Critical Path</div>
+              <div className="intel-sub">Longest chain · drives the deadline</div>
+            </div>
+            <button
+              type="button"
+              className="intel-toggle amber"
+              onClick={handleToggleCriticalPath}
+              disabled={cpLoading}
+            >
+              {cpLoading ? "Loading..." : showCriticalPath ? "Hide" : "Reveal"}
+            </button>
+          </div>
+          <div className="intel-body">
+            {cpError && <div className="error-msg">{cpError}</div>}
+            {showCriticalPath && criticalPathData ? (
+              criticalPathData.path && criticalPathData.path.length > 0 ? (
+                <>
+                  <div className="cp-chain">
+                    {criticalPathData.path.map((pid, i) => (
+                      <span key={pid} style={{ display: "contents" }}>
+                        {i > 0 && <span className="cp-link">→</span>}
+                        <span className="cp-node" title={criticalPathTitle(pid)}>
+                          {criticalPathTitle(pid)}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="critical-path-banner">
+                    <span>Scheduled duration of the critical chain</span>
+                    <span className="duration-pill">
+                      Total: {criticalPathData.total_duration} days
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="intel-hint">No critical path found — no tasks yet.</p>
+              )
+            ) : (
+              <p className="intel-hint">
+                Reveal the longest dependency chain. Tasks on this path are highlighted across the board and graph.
+              </p>
+            )}
+          </div>
+        </article>
+
+        <article className="intel-card">
+          <div className="intel-card-head">
+            <span className="intel-icon blue">🕸</span>
+            <div>
+              <div className="intel-title">Dependency Graph</div>
+              <div className="intel-sub">Prerequisite → dependent map</div>
+            </div>
+            <button
+              type="button"
+              className="intel-toggle blue"
+              onClick={() => setShowGraph((v) => !v)}
+            >
+              {showGraph ? "Hide" : "Show"}
+            </button>
+          </div>
+          <div className="intel-body">
+            {showGraph ? (
+              <DependencyGraph tasks={tasks} criticalPathIds={criticalPathIds} />
+            ) : (
+              <p className="intel-hint">
+                Visualize every task and dependency as a DAG. Blocked and critical-path nodes are highlighted.
+              </p>
+            )}
+          </div>
+        </article>
+
+        <article className="intel-card">
+          <div className="intel-card-head">
+            <span className="intel-icon violet">✨</span>
+            <div>
+              <div className="intel-title">AI Risk Analysis</div>
+              <div className="intel-sub">Advisory · never changes the schedule</div>
+            </div>
+            <button
+              type="button"
+              className="intel-toggle violet"
+              onClick={handleToggleRisk}
+              disabled={riskLoading}
+            >
+              {riskLoading ? "Analyzing..." : showRisk ? "Hide" : "Analyze"}
+            </button>
+          </div>
+          <div className="intel-body">
+            {riskError && <div className="error-msg">{riskError}</div>}
+            {showRisk && riskData ? (
+              <>
+                <div className="risk-summary">
+                  <span className={`risk-level ${riskData.risk_level}`}>{riskData.risk_level}</span>
+                  <span>{riskData.summary}</span>
+                </div>
+                {riskData.explanation && riskData.explanation !== riskData.summary && (
+                  <p className="intel-hint" style={{ fontStyle: "italic", marginBottom: "0.5rem" }}>
+                    {riskData.explanation}
+                  </p>
+                )}
+                {riskData.risks && riskData.risks.length === 0 ? (
+                  <div className="no-suggestions">No significant risks detected. 🎉</div>
+                ) : (
+                  <div className="risk-list">
+                    {(riskData.risks || []).map((r, i) => (
+                      <div key={i} className={`risk-item sev-${r.severity}`}>
+                        <div className="risk-item-head">
+                          <span className="risk-cat">{r.severity} · {r.category}</span>
+                          <span className="risk-tasks">{(r.task_titles || []).join(", ") || "Project"}</span>
+                        </div>
+                        <p className="risk-reason">{r.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="intel-hint">
+                Scan blocked tasks, bottlenecks and critical-path exposure
+                {riskData && riskData.llm_used ? " with an AI explanation." : " with deterministic analysis."}
+              </p>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <footer className="footer">TaskFlow Pro · DAG-powered scheduling · AI features are advisory only</footer>
     </div>
   );
 }
