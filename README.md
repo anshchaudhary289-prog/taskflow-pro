@@ -90,5 +90,28 @@ Never commit real .env files or API keys.
 8. Generate a task breakdown.
 9. Request and explicitly accept an AI dependency suggestion.
 
+## Key Assumptions and Limitations
+
+### Assumptions
+
+- Each task belongs to a single project and has a unique task ID.
+- A dependency represents a prerequisite relationship from one task to another.
+- A task becomes Ready only when all of its direct prerequisite tasks are completed.
+- Schedule propagation uses the maximum delay across converging dependency paths to avoid double-counting shared upstream delays.
+- AI-generated dependency suggestions are advisory and require explicit human acceptance before they modify the dependency graph.
+- The seeded project data is intended to demonstrate realistic task dependencies and scheduling behavior.
+
+### Limitations
+
+- The current demonstration uses SQLite for local persistence; a production deployment could use a managed relational database.
+- Gemini integration is optional. When an API key is unavailable, deterministic fallback logic is used for the AI-assisted features.
+- AI suggestions are generated from the tasks and project context currently available in the application.
+- Authentication, role-based access control, and multi-user collaboration are outside the current hackathon scope.
+- The current deployment configuration is intended for demonstration and evaluation rather than production-scale workloads.
+
+## AI-Tool Declaration
+
+ChatGPT and Claude were used during development of TaskFlow Pro. ChatGPT was used for planning, architecture discussions, debugging guidance, test-case design, documentation assistance, and frontend/UI refinement. Claude was used for code-generation assistance, implementation refinement, debugging, and development workflow support. All generated code was reviewed, integrated, tested, and validated by the participant. The final application, repository structure, testing, and submission decisions were reviewed by the participant.
+
 ## Hackathon compliance
 Before final submission, verify the event rules for source provenance, build-window requirements, AI-tool declarations, and commit history. Do not publish restricted reference material or secrets.
